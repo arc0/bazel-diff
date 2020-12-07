@@ -19,10 +19,10 @@ import java.util.stream.Collectors;
 import java.util.Arrays;
 
 interface BazelClient {
-    List<BazelTarget> queryAllTargets() throws IOException;
-    Set<String> queryForImpactedTargets(Set<String> impactedTargets) throws IOException;
-    Set<String> queryForTestTargets(Set<String> targets) throws IOException;
-    Set<BazelSourceFileTarget> convertFilepathsToSourceTargets(Set<Path> filepaths) throws IOException, NoSuchAlgorithmException;
+    List<BazelTarget> queryAllTargets() throws IOException, InterruptedException;
+    Set<String> queryForImpactedTargets(Set<String> impactedTargets) throws IOException, InterruptedException;
+    Set<String> queryForTestTargets(Set<String> targets) throws IOException, InterruptedException;
+    Set<BazelSourceFileTarget> convertFilepathsToSourceTargets(Set<Path> filepaths) throws IOException, NoSuchAlgorithmException, InterruptedException;
 }
 
 class BazelClientImpl implements BazelClient {
@@ -39,13 +39,13 @@ class BazelClientImpl implements BazelClient {
     }
 
     @Override
-    public List<BazelTarget> queryAllTargets() throws IOException {
+    public List<BazelTarget> queryAllTargets() throws IOException, InterruptedException {
         List<Build.Target> targets = performBazelQuery("'//external:all-targets' + '//...:all-targets'");
         return targets.stream().map( target -> new BazelTargetImpl(target)).collect(Collectors.toList());
     }
 
     @Override
-    public Set<String> queryForImpactedTargets(Set<String> impactedTargets) throws IOException {
+    public Set<String> queryForImpactedTargets(Set<String> impactedTargets) throws IOException, InterruptedException {
         Set<String> impactedTestTargets = new HashSet<>();
         String targetQuery = impactedTargets.stream().collect(Collectors.joining(" + "));
         List<Build.Target> targets = performBazelQuery(String.format("rdeps(//..., %s)", targetQuery));
@@ -58,7 +58,7 @@ class BazelClientImpl implements BazelClient {
     }
 
     @Override
-    public Set<String> queryForTestTargets(Set<String> targets) throws IOException {
+    public Set<String> queryForTestTargets(Set<String> targets) throws IOException, InterruptedException {
         Set<String> impactedTestTargets = new HashSet<>();
         String targetQuery = targets.stream().collect(Collectors.joining(" + "));
         List<Build.Target> testTargets = performBazelQuery(String.format("kind(test, %s)", targetQuery));
@@ -71,7 +71,7 @@ class BazelClientImpl implements BazelClient {
     }
 
     @Override
-    public Set<BazelSourceFileTarget> convertFilepathsToSourceTargets(Set<Path> filepaths) throws IOException, NoSuchAlgorithmException {
+    public Set<BazelSourceFileTarget> convertFilepathsToSourceTargets(Set<Path> filepaths) throws IOException, NoSuchAlgorithmException, InterruptedException {
         Set<BazelSourceFileTarget> sourceTargets = new HashSet<>();
         for (List<Path> partition : Iterables.partition(filepaths, 1)) {
             String targetQuery = partition
@@ -98,7 +98,7 @@ class BazelClientImpl implements BazelClient {
         return sourceTargets;
     }
 
-    private List<Build.Target> performBazelQuery(String query) throws IOException {
+    private List<Build.Target> performBazelQuery(String query) throws IOException, InterruptedException {
         Path tempFile = Files.createTempFile(null, ".txt");
         Files.write(tempFile, query.getBytes(StandardCharsets.UTF_8));
 
@@ -109,13 +109,15 @@ class BazelClientImpl implements BazelClient {
         cmd.add("--output");
         cmd.add("streamed_proto");
         cmd.add("--order_output=no");
+        cmd.add("--keep_going");
         cmd.add("--show_progress=false");
         cmd.add("--show_loading_progress=false");
         cmd.addAll(this.commandOptions);
         cmd.add("--query_file");
         cmd.add(tempFile.toString());
 
-        ProcessBuilder pb = new ProcessBuilder(cmd).directory(workingDirectory.toFile());
+        ProcessBuilder pb = new ProcessBuilder(cmd).inheritIO().directory(workingDirectory.toFile());
+
         Process process = pb.start();
         ArrayList<Build.Target> targets = new ArrayList<>();
         while (true) {
@@ -123,6 +125,7 @@ class BazelClientImpl implements BazelClient {
             if (target == null) break;  // EOF
             targets.add(target);
         }
+        process.waitFor();
 
         Files.delete(tempFile);
 
