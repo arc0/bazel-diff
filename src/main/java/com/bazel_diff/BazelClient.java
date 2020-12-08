@@ -73,7 +73,7 @@ class BazelClientImpl implements BazelClient {
     @Override
     public Set<BazelSourceFileTarget> convertFilepathsToSourceTargets(Set<Path> filepaths) throws IOException, NoSuchAlgorithmException, InterruptedException {
         Set<BazelSourceFileTarget> sourceTargets = new HashSet<>();
-        for (List<Path> partition : Iterables.partition(filepaths, 1)) {
+        for (List<Path> partition : Iterables.partition(filepaths, 100)) {
             String targetQuery = partition
                     .stream()
                     .map(path -> path.toString())
@@ -116,7 +116,7 @@ class BazelClientImpl implements BazelClient {
         cmd.add("--query_file");
         cmd.add(tempFile.toString());
 
-        ProcessBuilder pb = new ProcessBuilder(cmd).inheritIO().directory(workingDirectory.toFile());
+        ProcessBuilder pb = new ProcessBuilder(cmd).directory(workingDirectory.toFile());
 
         Process process = pb.start();
         ArrayList<Build.Target> targets = new ArrayList<>();
