@@ -9,6 +9,7 @@ import java.nio.charset.StandardCharsets;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
@@ -20,6 +21,7 @@ import java.util.Arrays;
 
 interface BazelClient {
     List<BazelTarget> queryAllTargets() throws IOException;
+    Set<Path> queryAllSourceFiles() throws IOException;
     Set<String> queryForImpactedTargets(Set<String> impactedTargets) throws IOException;
     Set<String> queryForTestTargets(Set<String> targets) throws IOException;
     Set<BazelSourceFileTarget> convertFilepathsToSourceTargets(Set<Path> filepaths) throws IOException, NoSuchAlgorithmException;
@@ -42,6 +44,17 @@ class BazelClientImpl implements BazelClient {
     public List<BazelTarget> queryAllTargets() throws IOException {
         List<Build.Target> targets = performBazelQuery("'//external:all-targets' + '//...:all-targets'");
         return targets.stream().map( target -> new BazelTargetImpl(target)).collect(Collectors.toList());
+    }
+
+    @Override
+    public Set<Path> queryAllSourceFiles() throws IOException {
+        List<Build.Target> sources = performBazelQuery("kind('source file', deps(//...))");
+        return sources.stream()
+                .map(source -> source.getSourceFile().getName())
+                .filter(name -> !name.startsWith("@"))
+                .map(bazelName -> bazelName.replaceFirst("//", "").replace(":", "/"))
+                .map(Paths::get)
+                .collect(Collectors.toSet());
     }
 
     @Override
@@ -73,7 +86,13 @@ class BazelClientImpl implements BazelClient {
     @Override
     public Set<BazelSourceFileTarget> convertFilepathsToSourceTargets(Set<Path> filepaths) throws IOException, NoSuchAlgorithmException {
         Set<BazelSourceFileTarget> sourceTargets = new HashSet<>();
-        for (List<Path> partition : Iterables.partition(filepaths, 1)) {
+
+        // filter out only valid bazel source files
+        Set<Path> allSources = this.queryAllSourceFiles();
+        Set<Path> validFilePaths = new HashSet<>(allSources);
+        validFilePaths.retainAll(filepaths);
+
+        for (List<Path> partition : Iterables.partition(validFilePaths, 100)) {
             String targetQuery = partition
                     .stream()
                     .map(path -> path.toString())
@@ -108,6 +127,7 @@ class BazelClientImpl implements BazelClient {
         cmd.add("query");
         cmd.add("--output");
         cmd.add("streamed_proto");
+        cmd.add("--keep_going");
         cmd.add("--order_output=no");
         cmd.add("--show_progress=false");
         cmd.add("--show_loading_progress=false");
