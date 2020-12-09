@@ -127,7 +127,6 @@ class BazelClientImpl implements BazelClient {
         cmd.add("query");
         cmd.add("--output");
         cmd.add("streamed_proto");
-        cmd.add("--keep_going");
         cmd.add("--order_output=no");
         cmd.add("--show_progress=false");
         cmd.add("--show_loading_progress=false");
