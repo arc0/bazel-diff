@@ -151,7 +151,7 @@ class BazelDiff implements Callable<Integer> {
     String bazelCommandOptions;
 
     @Override
-    public Integer call() throws IOException, InterruptedException {
+    public Integer call() throws IOException {
         if (startingHashesJSONPath == null || !startingHashesJSONPath.canRead()) {
             System.out.println("startingHashesJSONPath does not exist! Exiting");
             return ExitCode.USAGE;

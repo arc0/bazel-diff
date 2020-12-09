@@ -7,9 +7,9 @@ import java.security.NoSuchAlgorithmException;
 import java.util.*;
 
 interface TargetHashingClient {
-    Map<String, String> hashAllBazelTargets(Set<Path> modifiedFilepaths) throws IOException, NoSuchAlgorithmException, InterruptedException;
-    Set<String> getImpactedTargets(Map<String, String> startHashes, Map<String, String> endHashes) throws IOException, InterruptedException;
-    Set<String> getImpactedTestTargets(Map<String, String> startHashes, Map<String, String> endHashes) throws IOException, InterruptedException;
+    Map<String, String> hashAllBazelTargets(Set<Path> modifiedFilepaths) throws IOException, NoSuchAlgorithmException;
+    Set<String> getImpactedTargets(Map<String, String> startHashes, Map<String, String> endHashes) throws IOException;
+    Set<String> getImpactedTestTargets(Map<String, String> startHashes, Map<String, String> endHashes) throws IOException;
 }
 
 class TargetHashingClientImpl implements TargetHashingClient {
@@ -20,7 +20,7 @@ class TargetHashingClientImpl implements TargetHashingClient {
     }
 
     @Override
-    public Map<String, String> hashAllBazelTargets(Set<Path> modifiedFilepaths) throws IOException, NoSuchAlgorithmException, InterruptedException {
+    public Map<String, String> hashAllBazelTargets(Set<Path> modifiedFilepaths) throws IOException, NoSuchAlgorithmException {
         Set<BazelSourceFileTarget> bazelSourcefileTargets = bazelClient.convertFilepathsToSourceTargets(modifiedFilepaths);
         List<BazelTarget> allTargets = bazelClient.queryAllTargets();
         Map<String, String> targetHashes = new HashMap<>();
@@ -52,7 +52,7 @@ class TargetHashingClientImpl implements TargetHashingClient {
     }
 
     @Override
-    public Set<String> getImpactedTargets(Map<String, String> startHashes, Map<String, String> endHashes) throws IOException, InterruptedException {
+    public Set<String> getImpactedTargets(Map<String, String> startHashes, Map<String, String> endHashes) throws IOException {
         Set<String> impactedTargets = new HashSet<>();
         for ( Map.Entry<String,String> entry : endHashes.entrySet()) {
             String startHashValue = startHashes.get(entry.getKey());
@@ -64,7 +64,7 @@ class TargetHashingClientImpl implements TargetHashingClient {
     }
 
     @Override
-    public Set<String> getImpactedTestTargets(Map<String, String> startHashes, Map<String, String> endHashes) throws IOException, InterruptedException {
+    public Set<String> getImpactedTestTargets(Map<String, String> startHashes, Map<String, String> endHashes) throws IOException {
         Set<String> impactedTargets = getImpactedTargets(startHashes, endHashes);
         return bazelClient.queryForTestTargets(impactedTargets);
     }
